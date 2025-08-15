@@ -1,7 +1,7 @@
 # $\psi$: A Quantum Computational Toolkit
 $\psi$ is a powerful quantum computing toolkit designed for simulating quantum circuits on classical computers.
 
-**Current State**: Write now, refactor later.
+> :warning: **Warning: Work in Progress**
 
 ## Project Prospects
 - **`libpsi-core`**: A core library for writing and designing quantum circuits, used across all $\psi$ sub-projects. 
