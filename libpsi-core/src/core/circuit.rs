@@ -1,4 +1,4 @@
-use super::{CustomGate, QuantumRegister, QuantumState};
+use super::{CustomGate, QuantumState, Runtime};
 use crate::{format_amplitude, format_probability, Vector};
 use std::sync::Arc;
 use core::fmt;
@@ -108,47 +108,24 @@ impl QuantumCircuit {
     }
 
     pub fn compute(&mut self) -> &QuantumState {
+        self.compute_with(Runtime::default())
+    }
+
+    pub fn compute_with(&mut self, runtime: Runtime) -> &QuantumState {
         if self.computed_state.is_some() {
             return self.computed_state.as_ref().unwrap();
         }
 
-        let names: Vec<String> = (0..self.num_qubits).map(|i| format!("q{}", i)).collect();
-        let leaked_names: &'static [String] = Box::leak(names.into_boxed_slice());
-        let name_refs: Vec<&'static str> = leaked_names.iter().map(|s| s.as_str()).collect();
-
-        let mut register = QuantumRegister::new(
-            Box::leak(Box::new("circuit".to_string())).as_str(),
-            &name_refs,
-        );
-
-        use crate::gates::*;
-        for op in &self.operations {
-            match op {
-                GateOp::H(t) => register.apply_gate(&HADAMARD, &[*t]),
-                GateOp::X(t) => register.apply_gate(&PAULI_X, &[*t]),
-                GateOp::Y(t) => register.apply_gate(&PAULI_Y, &[*t]),
-                GateOp::Z(t) => register.apply_gate(&PAULI_Z, &[*t]),
-                GateOp::S(t) => register.apply_gate(&S_GATE, &[*t]),
-                GateOp::T(t) => register.apply_gate(&T_GATE, &[*t]),
-                GateOp::CNOT(c, t) => register.apply_gate(&CNOT, &[*c, *t]),
-                GateOp::CZ(c, t) => register.apply_gate(&CZ, &[*c, *t]),
-                GateOp::SWAP(a, b) => register.apply_gate(&SWAP, &[*a, *b]),
-                GateOp::CCNOT(c1, c2, t) => register.apply_gate(&TOFFOLI, &[*c1, *c2, *t]),
-                GateOp::CSWAP(c, t1, t2) => register.apply_gate(&FREDKIN, &[*c, *t1, *t2]),
-                GateOp::Measure(_, _) => {}
-                GateOp::Custom(gate, targets) => {
-                    let quantum_gate = gate.to_quantum_gate();
-                    register.apply_gate(&quantum_gate, targets);
-                }
-            }
-        }
-
-        self.computed_state = Some(register.get_state());
+        self.computed_state = Some(runtime.compute(self.num_qubits, &self.operations));
         self.computed_state.as_ref().unwrap()
     }
 
     pub fn state(&mut self) -> &QuantumState {
         self.compute()
+    }
+
+    pub fn state_with(&mut self, runtime: Runtime) -> &QuantumState {
+        self.compute_with(runtime)
     }
 
     pub fn h(&mut self, target: usize) -> &mut Self {
