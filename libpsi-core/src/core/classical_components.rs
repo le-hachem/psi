@@ -13,7 +13,7 @@ pub struct ClassicalRegister<'a> {
 }
 
 impl<'a> ClassicalBit<'a> {
-    pub fn new(name: &'a str, state: bool) -> ClassicalBit {
+    pub fn new(name: &'a str, state: bool) -> ClassicalBit<'a> {
         ClassicalBit { name, state }
     }
 
