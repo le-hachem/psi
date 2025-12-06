@@ -126,13 +126,53 @@ impl<T: Float> Complex<T> {
 
 impl_ops!(Add, add, +);
 impl_ops!(Sub, sub, -);
-impl_ops!(Mul, mul, *);
-impl_ops!(Div, div, /);
+
+impl<T: Float> ops::Mul for Complex<T> {
+    type Output = Complex<T>;
+
+    fn mul(self, other: Complex<T>) -> Complex<T> {
+        // (a + bi) * (c + di) = (ac - bd) + (ad + bc)i
+        Complex {
+            real: self.real * other.real - self.imaginary * other.imaginary,
+            imaginary: self.real * other.imaginary + self.imaginary * other.real,
+        }
+    }
+}
+
+impl<T: Float> ops::Div for Complex<T> {
+    type Output = Complex<T>;
+
+    fn div(self, other: Complex<T>) -> Complex<T> {
+        // (a + bi) / (c + di) = ((ac + bd) + (bc - ad)i) / (c² + d²)
+        let denom = other.real * other.real + other.imaginary * other.imaginary;
+        Complex {
+            real: (self.real * other.real + self.imaginary * other.imaginary) / denom,
+            imaginary: (self.imaginary * other.real - self.real * other.imaginary) / denom,
+        }
+    }
+}
 
 impl_ops!(AddAssign, add_assign, +, assign);
 impl_ops!(SubAssign, sub_assign, -, assign);
-impl_ops!(MulAssign, mul_assign, *, assign);
-impl_ops!(DivAssign, div_assign, /, assign);
+
+impl<T: Float> ops::MulAssign for Complex<T> {
+    fn mul_assign(&mut self, other: Complex<T>) {
+        let new_real = self.real * other.real - self.imaginary * other.imaginary;
+        let new_imag = self.real * other.imaginary + self.imaginary * other.real;
+        self.real = new_real;
+        self.imaginary = new_imag;
+    }
+}
+
+impl<T: Float> ops::DivAssign for Complex<T> {
+    fn div_assign(&mut self, other: Complex<T>) {
+        let denom = other.real * other.real + other.imaginary * other.imaginary;
+        let new_real = (self.real * other.real + self.imaginary * other.imaginary) / denom;
+        let new_imag = (self.imaginary * other.real - self.real * other.imaginary) / denom;
+        self.real = new_real;
+        self.imaginary = new_imag;
+    }
+}
 
 impl_ops!(Add, add, +, real);
 impl_ops!(Sub, sub, -, real);

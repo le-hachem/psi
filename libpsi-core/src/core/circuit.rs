@@ -1,8 +1,9 @@
-use super::{QuantumRegister, QuantumState};
+use super::{CustomGate, QuantumRegister, QuantumState};
 use crate::{format_amplitude, format_probability, Vector};
+use std::sync::Arc;
 use core::fmt;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum GateOp {
     H(usize),
     X(usize),
@@ -16,10 +17,11 @@ pub enum GateOp {
     CCNOT(usize, usize, usize),
     CSWAP(usize, usize, usize),
     Measure(usize, usize),
+    Custom(Arc<CustomGate>, Vec<usize>),
 }
 
 impl GateOp {
-    pub fn name(&self) -> &'static str {
+    pub fn name(&self) -> &str {
         match self {
             GateOp::H(_) => "H",
             GateOp::X(_) => "X",
@@ -33,6 +35,7 @@ impl GateOp {
             GateOp::CCNOT(_, _, _) => "CCNOT",
             GateOp::CSWAP(_, _, _) => "CSWAP",
             GateOp::Measure(_, _) => "M",
+            GateOp::Custom(gate, _) => &gate.name,
         }
     }
 
@@ -42,6 +45,7 @@ impl GateOp {
             GateOp::CNOT(c, t) | GateOp::CZ(c, t) | GateOp::SWAP(c, t) => vec![*c, *t],
             GateOp::CCNOT(c1, c2, t) | GateOp::CSWAP(c1, c2, t) => vec![*c1, *c2, *t],
             GateOp::Measure(q, _) => vec![*q],
+            GateOp::Custom(_, targets) => targets.clone(),
         }
     }
 
@@ -54,6 +58,10 @@ impl GateOp {
 
     pub fn is_measurement(&self) -> bool {
         matches!(self, GateOp::Measure(_, _))
+    }
+
+    pub fn is_custom(&self) -> bool {
+        matches!(self, GateOp::Custom(_, _))
     }
 }
 
@@ -128,6 +136,10 @@ impl QuantumCircuit {
                 GateOp::CCNOT(c1, c2, t) => register.apply_gate(&TOFFOLI, &[*c1, *c2, *t]),
                 GateOp::CSWAP(c, t1, t2) => register.apply_gate(&FREDKIN, &[*c, *t1, *t2]),
                 GateOp::Measure(_, _) => {}
+                GateOp::Custom(gate, targets) => {
+                    let quantum_gate = gate.to_quantum_gate();
+                    register.apply_gate(&quantum_gate, targets);
+                }
             }
         }
 
@@ -232,6 +244,18 @@ impl QuantumCircuit {
         self
     }
 
+    pub fn custom(&mut self, gate: &Arc<CustomGate>, targets: &[usize]) -> &mut Self {
+        self.operations.push(GateOp::Custom(Arc::clone(gate), targets.to_vec()));
+        self.computed_state = None;
+        self
+    }
+
+    pub fn apply_custom(&mut self, gate: CustomGate, targets: &[usize]) -> &mut Self {
+        self.operations.push(GateOp::Custom(Arc::new(gate), targets.to_vec()));
+        self.computed_state = None;
+        self
+    }
+
     pub fn reset(&mut self) -> &mut Self {
         self.operations.clear();
         self.computed_state = None;
@@ -272,6 +296,7 @@ impl fmt::Display for QuantumCircuit {
         for (i, op) in self.operations.iter().enumerate() {
             match op {
                 GateOp::Measure(q, c) => writeln!(f, "  {}: {} q{} → c{}", i, op.name(), q, c)?,
+                GateOp::Custom(gate, targets) => writeln!(f, "  {}: [{}] on {:?}", i, gate.name, targets)?,
                 _ => writeln!(f, "  {}: {} on {:?}", i, op.name(), op.quantum_targets())?,
             }
         }

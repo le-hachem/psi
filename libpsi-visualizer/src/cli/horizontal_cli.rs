@@ -246,6 +246,31 @@ impl<'a> fmt::Display for HorizontalRenderer<'a> {
                     }
                     gap_line.push_str("  ║  ");
                 }
+                GateOp::Custom(gate, targets) => {
+                    let name = &gate.name;
+                    let label = format!("[{}]", name);
+
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if targets.contains(&i) {
+                            if i == targets[0] {
+                                line.push_str(&format!("─{}─", label));
+                            } else {
+                                line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                            }
+                        } else if i > min_q && i < max_q {
+                            line.push_str(&format!(
+                                "─{}─",
+                                "│".to_string() + &"─".repeat(label.len() - 1)
+                            ));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
             }
         }
 

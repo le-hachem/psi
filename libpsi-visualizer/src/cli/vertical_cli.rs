@@ -10,6 +10,44 @@ impl<'a> VerticalRenderer<'a> {
     pub fn new(circuit: &'a QuantumCircuit) -> Self {
         VerticalRenderer { circuit }
     }
+
+    fn gate_label(op: &GateOp) -> String {
+        match op {
+            GateOp::H(_) => "[H]".to_string(),
+            GateOp::X(_) => "[X]".to_string(),
+            GateOp::Y(_) => "[Y]".to_string(),
+            GateOp::Z(_) => "[Z]".to_string(),
+            GateOp::S(_) => "[S]".to_string(),
+            GateOp::T(_) => "[T]".to_string(),
+            GateOp::CNOT(_, _) => "●".to_string(),
+            GateOp::CZ(_, _) => "●".to_string(),
+            GateOp::SWAP(_, _) => "╳".to_string(),
+            GateOp::CCNOT(_, _, _) => "●".to_string(),
+            GateOp::CSWAP(_, _, _) => "●".to_string(),
+            GateOp::Measure(_, _) => "[M]".to_string(),
+            GateOp::Custom(gate, _) => format!("[{}]", gate.name),
+        }
+    }
+
+    fn calculate_col_width(&self) -> usize {
+        let min_width = 3;
+        let mut max_label_len = min_width;
+
+        for op in self.circuit.operations() {
+            let label = Self::gate_label(op);
+            let char_count: usize = label.chars().count();
+            if char_count > max_label_len {
+                max_label_len = char_count;
+            }
+        }
+
+        let width = max_label_len + 2;
+        if width % 2 == 0 {
+            width + 1
+        } else {
+            width
+        }
+    }
 }
 
 impl<'a> Visualizer for VerticalRenderer<'a> {
@@ -24,7 +62,7 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
         let nc = self.circuit.num_classical();
         let ops = self.circuit.operations();
 
-        let col_width = 5;
+        let col_width = self.calculate_col_width();
         let gap_width = 3;
 
         let q_header: String = (0..nq)
@@ -64,6 +102,10 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
             return Ok(());
         }
 
+        let q_total = nq * col_width + (nq - 1);
+        let c_total = if nc > 0 { nc * col_width + (nc - 1) } else { 0 };
+        let total_width = q_total + gap_width + c_total;
+
         for op in ops {
             writeln!(f, "{}", full_wires)?;
 
@@ -71,44 +113,45 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
             let min_q = q_targets.iter().min().copied().unwrap_or(0);
             let max_q = q_targets.iter().max().copied().unwrap_or(0);
 
-            let mut q_cols: Vec<String> = (0..nq)
-                .map(|_| format!("{:^width$}", "│", width = col_width))
-                .collect();
-
-            let c_cols: Vec<String> = (0..nc)
-                .map(|_| format!("{:^width$}", "║", width = col_width))
-                .collect();
+            let label = Self::gate_label(op);
 
             match op {
-                GateOp::H(t) => {
-                    q_cols[*t] = format!("{:^width$}", "[H]", width = col_width);
-                }
-                GateOp::X(t) => {
-                    q_cols[*t] = format!("{:^width$}", "[X]", width = col_width);
-                }
-                GateOp::Y(t) => {
-                    q_cols[*t] = format!("{:^width$}", "[Y]", width = col_width);
-                }
-                GateOp::Z(t) => {
-                    q_cols[*t] = format!("{:^width$}", "[Z]", width = col_width);
-                }
-                GateOp::S(t) => {
-                    q_cols[*t] = format!("{:^width$}", "[S]", width = col_width);
-                }
-                GateOp::T(t) => {
-                    q_cols[*t] = format!("{:^width$}", "[T]", width = col_width);
+                GateOp::H(t)
+                | GateOp::X(t)
+                | GateOp::Y(t)
+                | GateOp::Z(t)
+                | GateOp::S(t)
+                | GateOp::T(t) => {
+                    let mut line: Vec<char> = vec![' '; total_width];
+
+                    for i in 0..nq {
+                        let col_start = i * (col_width + 1);
+                        let center = col_start + col_width / 2;
+                        if i == *t {
+                            let label_start = col_start + (col_width - label.chars().count()) / 2;
+                            for (j, ch) in label.chars().enumerate() {
+                                line[label_start + j] = ch;
+                            }
+                        } else {
+                            line[center] = '│';
+                        }
+                    }
+
+                    for i in 0..nc {
+                        let center = q_total + gap_width + i * (col_width + 1) + col_width / 2;
+                        line[center] = '║';
+                    }
+
+                    let gate_line: String = line.into_iter().collect();
+                    writeln!(f, "{}", gate_line)?;
                 }
                 GateOp::CNOT(c, t) | GateOp::CZ(c, t) | GateOp::SWAP(c, t) => {
                     let (sym1, sym2) = match op {
-                        GateOp::CNOT(_, _) => ("●", "⊕"),
-                        GateOp::CZ(_, _) => ("●", "●"),
-                        GateOp::SWAP(_, _) => ("╳", "╳"),
+                        GateOp::CNOT(_, _) => ('●', '⊕'),
+                        GateOp::CZ(_, _) => ('●', '●'),
+                        GateOp::SWAP(_, _) => ('╳', '╳'),
                         _ => unreachable!(),
                     };
-
-                    let q_total = nq * col_width + (nq - 1);
-                    let c_total = if nc > 0 { nc * col_width + (nc - 1) } else { 0 };
-                    let total_width = q_total + gap_width + c_total;
 
                     let mut line: Vec<char> = vec![' '; total_width];
 
@@ -117,9 +160,9 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
                         if i < min_q || i > max_q {
                             line[center] = '│';
                         } else if i == *c {
-                            line[center] = sym1.chars().next().unwrap();
+                            line[center] = sym1;
                         } else if i == *t {
-                            line[center] = sym2.chars().next().unwrap();
+                            line[center] = sym2;
                         }
                     }
 
@@ -138,7 +181,6 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
 
                     let gate_line: String = line.into_iter().collect();
                     writeln!(f, "{}", gate_line)?;
-                    continue;
                 }
                 GateOp::CCNOT(c1, c2, t) | GateOp::CSWAP(c1, c2, t) => {
                     let (sym_c, sym_t) = match op {
@@ -147,10 +189,6 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
                         _ => unreachable!(),
                     };
                     let is_cswap = matches!(op, GateOp::CSWAP(_, _, _));
-
-                    let q_total = nq * col_width + (nq - 1);
-                    let c_total = if nc > 0 { nc * col_width + (nc - 1) } else { 0 };
-                    let total_width = q_total + gap_width + c_total;
 
                     let mut line: Vec<char> = vec![' '; total_width];
 
@@ -161,11 +199,7 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
                         } else if i == *c1 {
                             line[center] = sym_c;
                         } else if i == *c2 {
-                            if is_cswap {
-                                line[center] = sym_t;
-                            } else {
-                                line[center] = sym_c;
-                            }
+                            line[center] = if is_cswap { sym_t } else { sym_c };
                         } else if i == *t {
                             line[center] = sym_t;
                         }
@@ -186,31 +220,25 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
 
                     let gate_line: String = line.into_iter().collect();
                     writeln!(f, "{}", gate_line)?;
-                    continue;
                 }
                 GateOp::Measure(mq, mc) => {
-                    let q_total = nq * col_width + (nq - 1);
-                    let c_total = if nc > 0 { nc * col_width + (nc - 1) } else { 0 };
-                    let total_width = q_total + gap_width + c_total;
-
                     let mut line: Vec<char> = vec![' '; total_width];
 
                     for i in 0..nq {
-                        let center = i * (col_width + 1) + col_width / 2;
+                        let col_start = i * (col_width + 1);
+                        let center = col_start + col_width / 2;
                         if i < *mq {
                             line[center] = '│';
                         } else if i == *mq {
-                            let start = i * (col_width + 1);
-                            let chars: Vec<char> = "[M]".chars().collect();
-                            for (j, ch) in chars.iter().enumerate() {
-                                if start + j + 1 < total_width {
-                                    line[start + j + 1] = *ch;
-                                }
+                            let label_start = col_start + (col_width - label.chars().count()) / 2;
+                            for (j, ch) in label.chars().enumerate() {
+                                line[label_start + j] = ch;
                             }
                         }
                     }
 
-                    let mq_center = *mq * (col_width + 1) + col_width / 2;
+                    let mq_col_start = *mq * (col_width + 1);
+                    let mq_center = mq_col_start + col_width / 2;
                     let mc_start = q_total + gap_width;
                     let mc_center = mc_start + *mc * (col_width + 1) + col_width / 2;
 
@@ -221,35 +249,76 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
                     }
                     line[mc_center] = '╣';
 
-                    if nc > 0 {
-                        for i in 0..nc {
-                            let center = mc_start + i * (col_width + 1) + col_width / 2;
-                            if i > *mc {
-                                line[center] = '║';
-                            }
+                    for i in 0..nc {
+                        let center = mc_start + i * (col_width + 1) + col_width / 2;
+                        if i > *mc {
+                            line[center] = '║';
                         }
                     }
 
                     let measure_line: String = line.into_iter().collect();
                     writeln!(f, "{}", measure_line)?;
-                    continue;
                 }
-            }
+                GateOp::Custom(_, targets) => {
+                    let mut line: Vec<char> = vec![' '; total_width];
 
-            let q_row: String = q_cols.join(" ");
-            let c_row: String = c_cols.join(" ");
-            if nc > 0 {
-                writeln!(f, "{}{}{}", q_row, " ".repeat(gap_width), c_row)?;
-            } else {
-                writeln!(f, "{}", q_row)?;
+                    if targets.len() == 1 {
+                        for i in 0..nq {
+                            let col_start = i * (col_width + 1);
+                            let center = col_start + col_width / 2;
+                            if i == targets[0] {
+                                let label_start =
+                                    col_start + (col_width - label.chars().count()) / 2;
+                                for (j, ch) in label.chars().enumerate() {
+                                    line[label_start + j] = ch;
+                                }
+                            } else {
+                                line[center] = '│';
+                            }
+                        }
+
+                        for i in 0..nc {
+                            let center = q_total + gap_width + i * (col_width + 1) + col_width / 2;
+                            line[center] = '║';
+                        }
+                    } else {
+                        for i in 0..nq {
+                            let col_start = i * (col_width + 1);
+                            let center = col_start + col_width / 2;
+                            if i < min_q || i > max_q {
+                                line[center] = '│';
+                            } else if i == targets[0] {
+                                let label_start =
+                                    col_start + (col_width - label.chars().count()) / 2;
+                                for (j, ch) in label.chars().enumerate() {
+                                    line[label_start + j] = ch;
+                                }
+                            } else if targets.contains(&i) {
+                                line[center] = '□';
+                            }
+                        }
+
+                        let min_center = min_q * (col_width + 1) + col_width / 2;
+                        let max_center = max_q * (col_width + 1) + col_width / 2;
+                        for pos in (min_center + 1)..max_center {
+                            if line[pos] == ' ' {
+                                line[pos] = '─';
+                            }
+                        }
+
+                        for i in 0..nc {
+                            let center = q_total + gap_width + i * (col_width + 1) + col_width / 2;
+                            line[center] = '║';
+                        }
+                    }
+
+                    let gate_line: String = line.into_iter().collect();
+                    writeln!(f, "{}", gate_line)?;
+                }
             }
         }
 
         writeln!(f, "{}", full_wires)?;
-
-        let q_total = nq * col_width + (nq - 1);
-        let c_total = if nc > 0 { nc * col_width + (nc - 1) } else { 0 };
-        let total_width = q_total + gap_width + c_total;
 
         let end_line: String = "░".repeat(total_width);
         writeln!(f, "{}", end_line)?;
