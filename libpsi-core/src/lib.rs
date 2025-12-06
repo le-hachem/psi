@@ -2,6 +2,7 @@ pub mod core;
 pub mod maths;
 
 pub use maths::complex::*;
+pub use maths::format::*;
 pub use maths::matrix::*;
 pub use maths::numeric::*;
 pub use maths::vector::*;

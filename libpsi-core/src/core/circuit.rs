@@ -1,5 +1,5 @@
 use super::{QuantumGate, QuantumRegister, QuantumState};
-use crate::Vector;
+use crate::{format_amplitude, format_probability, Vector};
 use core::fmt;
 
 #[derive(Clone)]
@@ -211,9 +211,23 @@ impl<'a> fmt::Display for QuantumCircuit<'a> {
             let amp = state.get(i);
             if amp.real.abs() > 1e-10 || amp.imaginary.abs() > 1e-10 {
                 let basis: String = format!("{:0width$b}", i, width = self.num_qubits());
-                writeln!(f, "  |{}⟩: {:.4}", basis, amp)?;
+                writeln!(f, "  |{}⟩: {}", basis, format_amplitude(&amp))?;
             }
         }
         Ok(())
+    }
+}
+
+impl<'a> QuantumCircuit<'a> {
+    pub fn print_probabilities(&self) {
+        let probs = self.probabilities();
+        let n = self.num_qubits();
+        println!("Probabilities:");
+        for (i, p) in probs.iter().enumerate() {
+            if *p > 1e-10 {
+                let basis: String = format!("{:0width$b}", i, width = n);
+                println!("  |{}⟩: {}", basis, format_probability(*p));
+            }
+        }
     }
 }
