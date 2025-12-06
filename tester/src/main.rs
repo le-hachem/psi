@@ -6,7 +6,10 @@ fn main() {
     let mut bell = QuantumCircuit::with_classical(2, 2);
     bell.h(0).cnot(0, 1).measure(0, 0).measure(1, 1);
 
+    println!("Horizontal:");
     println!("{}", HorizontalRenderer::new(&bell));
+    println!("Vertical:");
+    println!("{}", VerticalRenderer::new(&bell));
 
     bell.compute();
     println!("{}", bell);
@@ -17,7 +20,10 @@ fn main() {
     let mut ghz = QuantumCircuit::new(3);
     ghz.h(0).cnot(0, 1).cnot(0, 2);
 
+    println!("Horizontal:");
     println!("{}", HorizontalRenderer::new(&ghz));
+    println!("Vertical:");
+    println!("{}", VerticalRenderer::new(&ghz));
 
     ghz.compute();
     println!("{}", ghz);
@@ -28,7 +34,10 @@ fn main() {
     let mut swap_circuit = QuantumCircuit::new(2);
     swap_circuit.x(0).cnot(0, 1).cnot(1, 0).cnot(0, 1);
 
+    println!("Horizontal:");
     println!("{}", HorizontalRenderer::new(&swap_circuit));
+    println!("Vertical:");
+    println!("{}", VerticalRenderer::new(&swap_circuit));
 
     swap_circuit.compute();
     println!("{}", swap_circuit);
@@ -39,7 +48,10 @@ fn main() {
     let mut toffoli_circuit = QuantumCircuit::new(3);
     toffoli_circuit.x(0).x(1).toffoli(0, 1, 2);
 
+    println!("Horizontal:");
     println!("{}", HorizontalRenderer::new(&toffoli_circuit));
+    println!("Vertical:");
+    println!("{}", VerticalRenderer::new(&toffoli_circuit));
 
     toffoli_circuit.compute();
     println!("{}", toffoli_circuit);
@@ -50,7 +62,10 @@ fn main() {
     let mut full = QuantumCircuit::with_classical(3, 3);
     full.h(0).h(1).h(2).measure_all();
 
+    println!("Horizontal:");
     println!("{}", HorizontalRenderer::new(&full));
+    println!("Vertical:");
+    println!("{}", VerticalRenderer::new(&full));
 
     full.compute();
     println!("{}", full);
@@ -69,7 +84,10 @@ fn main() {
         .measure(0, 0)
         .measure(1, 1);
 
+    println!("Horizontal:");
     println!("{}", HorizontalRenderer::new(&complex));
+    println!("Vertical:");
+    println!("{}", VerticalRenderer::new(&complex));
 
     complex.compute();
     println!("{}", complex);

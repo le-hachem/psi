@@ -1,3 +1,4 @@
+use super::visualizer::Visualizer;
 use core::fmt;
 use libpsi_core::{GateOp, QuantumCircuit};
 
@@ -8,6 +9,12 @@ pub struct HorizontalRenderer<'a> {
 impl<'a> HorizontalRenderer<'a> {
     pub fn new(circuit: &'a QuantumCircuit) -> Self {
         HorizontalRenderer { circuit }
+    }
+}
+
+impl<'a> Visualizer for HorizontalRenderer<'a> {
+    fn export(&self) -> String {
+        format!("{}", self)
     }
 }
 
@@ -41,12 +48,12 @@ impl<'a> fmt::Display for HorizontalRenderer<'a> {
 
         if ops.is_empty() {
             for line in &q_lines {
-                writeln!(f, "{}───", line)?;
+                writeln!(f, "{}───░", line)?;
             }
             if nc > 0 {
-                writeln!(f, "{}   ", gap_line)?;
+                writeln!(f, "{}   ░", gap_line)?;
                 for line in &c_lines {
-                    writeln!(f, "{}═══", line)?;
+                    writeln!(f, "{}═══░", line)?;
                 }
             }
             return Ok(());
@@ -243,12 +250,12 @@ impl<'a> fmt::Display for HorizontalRenderer<'a> {
         }
 
         for line in &q_lines {
-            writeln!(f, "{}", line)?;
+            writeln!(f, "{}░", line)?;
         }
         if nc > 0 {
-            writeln!(f, "{}", gap_line)?;
+            writeln!(f, "{}░", gap_line)?;
             for line in &c_lines {
-                writeln!(f, "{}", line)?;
+                writeln!(f, "{}░", line)?;
             }
         }
 
