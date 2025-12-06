@@ -1,122 +1,183 @@
-use super::{QuantumGate, QuantumRegister, QuantumState};
+use super::{QuantumRegister, QuantumState};
 use crate::{format_amplitude, format_probability, Vector};
 use core::fmt;
 
-#[derive(Clone)]
-pub struct CircuitOperation<'a> {
-    pub gate: &'a QuantumGate<'a>,
-    pub targets: Vec<usize>,
+#[derive(Clone, Copy)]
+pub enum GateOp {
+    H(usize),
+    X(usize),
+    Y(usize),
+    Z(usize),
+    S(usize),
+    T(usize),
+    CNOT(usize, usize),
+    CZ(usize, usize),
+    SWAP(usize, usize),
+    CCNOT(usize, usize, usize),
+    CSWAP(usize, usize, usize),
+    Measure(usize, usize),
 }
 
-impl<'a> CircuitOperation<'a> {
-    pub fn new(gate: &'a QuantumGate<'a>, targets: Vec<usize>) -> Self {
-        CircuitOperation { gate, targets }
-    }
-}
-
-pub struct QuantumCircuit<'a> {
-    register: QuantumRegister<'a>,
-    operations: Vec<CircuitOperation<'a>>,
-}
-
-impl<'a> QuantumCircuit<'a> {
-    pub fn new(num_qubits: usize) -> QuantumCircuit<'a> {
-        let names: Vec<String> = (0..num_qubits).map(|i| format!("q{}", i)).collect();
-        let leaked_names: &'a [String] = Box::leak(names.into_boxed_slice());
-        let name_refs: Vec<&'a str> = leaked_names.iter().map(|s| s.as_str()).collect();
-
-        QuantumCircuit {
-            register: QuantumRegister::new(
-                Box::leak(Box::new("circuit".to_string())).as_str(),
-                &name_refs,
-            ),
-            operations: Vec::new(),
+impl GateOp {
+    pub fn name(&self) -> &'static str {
+        match self {
+            GateOp::H(_) => "H",
+            GateOp::X(_) => "X",
+            GateOp::Y(_) => "Y",
+            GateOp::Z(_) => "Z",
+            GateOp::S(_) => "S",
+            GateOp::T(_) => "T",
+            GateOp::CNOT(_, _) => "CNOT",
+            GateOp::CZ(_, _) => "CZ",
+            GateOp::SWAP(_, _) => "SWAP",
+            GateOp::CCNOT(_, _, _) => "CCNOT",
+            GateOp::CSWAP(_, _, _) => "CSWAP",
+            GateOp::Measure(_, _) => "M",
         }
     }
 
-    pub fn from_register(register: QuantumRegister<'a>) -> QuantumCircuit<'a> {
+    pub fn quantum_targets(&self) -> Vec<usize> {
+        match self {
+            GateOp::H(t) | GateOp::X(t) | GateOp::Y(t) | GateOp::Z(t) | GateOp::S(t) | GateOp::T(t) => vec![*t],
+            GateOp::CNOT(c, t) | GateOp::CZ(c, t) | GateOp::SWAP(c, t) => vec![*c, *t],
+            GateOp::CCNOT(c1, c2, t) | GateOp::CSWAP(c1, c2, t) => vec![*c1, *c2, *t],
+            GateOp::Measure(q, _) => vec![*q],
+        }
+    }
+
+    pub fn classical_targets(&self) -> Vec<usize> {
+        match self {
+            GateOp::Measure(_, c) => vec![*c],
+            _ => vec![],
+        }
+    }
+
+    pub fn is_measurement(&self) -> bool {
+        matches!(self, GateOp::Measure(_, _))
+    }
+}
+
+pub struct QuantumCircuit {
+    num_qubits: usize,
+    num_classical: usize,
+    operations: Vec<GateOp>,
+    computed_state: Option<QuantumState>,
+}
+
+impl QuantumCircuit {
+    pub fn new(num_qubits: usize) -> QuantumCircuit {
         QuantumCircuit {
-            register,
+            num_qubits,
+            num_classical: 0,
             operations: Vec::new(),
+            computed_state: None,
+        }
+    }
+
+    pub fn with_classical(num_qubits: usize, num_classical: usize) -> QuantumCircuit {
+        QuantumCircuit {
+            num_qubits,
+            num_classical,
+            operations: Vec::new(),
+            computed_state: None,
         }
     }
 
     pub fn num_qubits(&self) -> usize {
-        self.register.num_qubits()
+        self.num_qubits
     }
 
-    pub fn state(&self) -> QuantumState {
-        self.register.get_state()
+    pub fn num_classical(&self) -> usize {
+        self.num_classical
     }
 
-    pub fn register(&self) -> &QuantumRegister<'a> {
-        &self.register
-    }
-
-    pub fn operations(&self) -> &[CircuitOperation<'a>] {
+    pub fn operations(&self) -> &[GateOp] {
         &self.operations
     }
 
-    pub fn apply(&mut self, gate: &'a QuantumGate<'a>, targets: &[usize]) -> &mut Self {
-        self.register.apply_gate(gate, targets);
-        self.operations
-            .push(CircuitOperation::new(gate, targets.to_vec()));
-        self
+    pub fn is_computed(&self) -> bool {
+        self.computed_state.is_some()
+    }
+
+    pub fn compute(&mut self) -> &QuantumState {
+        if self.computed_state.is_some() {
+            return self.computed_state.as_ref().unwrap();
+        }
+
+        let names: Vec<String> = (0..self.num_qubits).map(|i| format!("q{}", i)).collect();
+        let leaked_names: &'static [String] = Box::leak(names.into_boxed_slice());
+        let name_refs: Vec<&'static str> = leaked_names.iter().map(|s| s.as_str()).collect();
+
+        let mut register = QuantumRegister::new(
+            Box::leak(Box::new("circuit".to_string())).as_str(),
+            &name_refs,
+        );
+
+        use crate::gates::*;
+        for op in &self.operations {
+            match op {
+                GateOp::H(t) => register.apply_gate(&HADAMARD, &[*t]),
+                GateOp::X(t) => register.apply_gate(&PAULI_X, &[*t]),
+                GateOp::Y(t) => register.apply_gate(&PAULI_Y, &[*t]),
+                GateOp::Z(t) => register.apply_gate(&PAULI_Z, &[*t]),
+                GateOp::S(t) => register.apply_gate(&S_GATE, &[*t]),
+                GateOp::T(t) => register.apply_gate(&T_GATE, &[*t]),
+                GateOp::CNOT(c, t) => register.apply_gate(&CNOT, &[*c, *t]),
+                GateOp::CZ(c, t) => register.apply_gate(&CZ, &[*c, *t]),
+                GateOp::SWAP(a, b) => register.apply_gate(&SWAP, &[*a, *b]),
+                GateOp::CCNOT(c1, c2, t) => register.apply_gate(&TOFFOLI, &[*c1, *c2, *t]),
+                GateOp::CSWAP(c, t1, t2) => register.apply_gate(&FREDKIN, &[*c, *t1, *t2]),
+                GateOp::Measure(_, _) => {}
+            }
+        }
+
+        self.computed_state = Some(register.get_state());
+        self.computed_state.as_ref().unwrap()
+    }
+
+    pub fn state(&mut self) -> &QuantumState {
+        self.compute()
     }
 
     pub fn h(&mut self, target: usize) -> &mut Self {
-        use crate::gates::HADAMARD;
-        self.register.apply_gate(&HADAMARD, &[target]);
-        self.operations
-            .push(CircuitOperation::new(&HADAMARD, vec![target]));
+        self.operations.push(GateOp::H(target));
+        self.computed_state = None;
         self
     }
 
     pub fn x(&mut self, target: usize) -> &mut Self {
-        use crate::gates::PAULI_X;
-        self.register.apply_gate(&PAULI_X, &[target]);
-        self.operations
-            .push(CircuitOperation::new(&PAULI_X, vec![target]));
+        self.operations.push(GateOp::X(target));
+        self.computed_state = None;
         self
     }
 
     pub fn y(&mut self, target: usize) -> &mut Self {
-        use crate::gates::PAULI_Y;
-        self.register.apply_gate(&PAULI_Y, &[target]);
-        self.operations
-            .push(CircuitOperation::new(&PAULI_Y, vec![target]));
+        self.operations.push(GateOp::Y(target));
+        self.computed_state = None;
         self
     }
 
     pub fn z(&mut self, target: usize) -> &mut Self {
-        use crate::gates::PAULI_Z;
-        self.register.apply_gate(&PAULI_Z, &[target]);
-        self.operations
-            .push(CircuitOperation::new(&PAULI_Z, vec![target]));
+        self.operations.push(GateOp::Z(target));
+        self.computed_state = None;
         self
     }
 
     pub fn s(&mut self, target: usize) -> &mut Self {
-        use crate::gates::S_GATE;
-        self.register.apply_gate(&S_GATE, &[target]);
-        self.operations
-            .push(CircuitOperation::new(&S_GATE, vec![target]));
+        self.operations.push(GateOp::S(target));
+        self.computed_state = None;
         self
     }
 
     pub fn t(&mut self, target: usize) -> &mut Self {
-        use crate::gates::T_GATE;
-        self.register.apply_gate(&T_GATE, &[target]);
-        self.operations
-            .push(CircuitOperation::new(&T_GATE, vec![target]));
+        self.operations.push(GateOp::T(target));
+        self.computed_state = None;
         self
     }
 
     pub fn cnot(&mut self, control: usize, target: usize) -> &mut Self {
-        use crate::gates::CNOT;
-        self.register.apply_gate(&CNOT, &[control, target]);
-        self.operations
-            .push(CircuitOperation::new(&CNOT, vec![control, target]));
+        self.operations.push(GateOp::CNOT(control, target));
+        self.computed_state = None;
         self
     }
 
@@ -125,29 +186,20 @@ impl<'a> QuantumCircuit<'a> {
     }
 
     pub fn cz(&mut self, control: usize, target: usize) -> &mut Self {
-        use crate::gates::CZ;
-        self.register.apply_gate(&CZ, &[control, target]);
-        self.operations
-            .push(CircuitOperation::new(&CZ, vec![control, target]));
+        self.operations.push(GateOp::CZ(control, target));
+        self.computed_state = None;
         self
     }
 
     pub fn swap(&mut self, qubit1: usize, qubit2: usize) -> &mut Self {
-        use crate::gates::SWAP;
-        self.register.apply_gate(&SWAP, &[qubit1, qubit2]);
-        self.operations
-            .push(CircuitOperation::new(&SWAP, vec![qubit1, qubit2]));
+        self.operations.push(GateOp::SWAP(qubit1, qubit2));
+        self.computed_state = None;
         self
     }
 
     pub fn ccnot(&mut self, control1: usize, control2: usize, target: usize) -> &mut Self {
-        use crate::gates::TOFFOLI;
-        self.register
-            .apply_gate(&TOFFOLI, &[control1, control2, target]);
-        self.operations.push(CircuitOperation::new(
-            &TOFFOLI,
-            vec![control1, control2, target],
-        ));
+        self.operations.push(GateOp::CCNOT(control1, control2, target));
+        self.computed_state = None;
         self
     }
 
@@ -156,13 +208,8 @@ impl<'a> QuantumCircuit<'a> {
     }
 
     pub fn cswap(&mut self, control: usize, target1: usize, target2: usize) -> &mut Self {
-        use crate::gates::FREDKIN;
-        self.register
-            .apply_gate(&FREDKIN, &[control, target1, target2]);
-        self.operations.push(CircuitOperation::new(
-            &FREDKIN,
-            vec![control, target1, target2],
-        ));
+        self.operations.push(GateOp::CSWAP(control, target1, target2));
+        self.computed_state = None;
         self
     }
 
@@ -170,58 +217,44 @@ impl<'a> QuantumCircuit<'a> {
         self.cswap(control, target1, target2)
     }
 
-    pub fn reset(&mut self) -> &mut Self {
-        let n = self.num_qubits();
-        let names: Vec<String> = (0..n).map(|i| format!("q{}", i)).collect();
-        let leaked_names: &'a [String] = Box::leak(names.into_boxed_slice());
-        let name_refs: Vec<&'a str> = leaked_names.iter().map(|s| s.as_str()).collect();
-
-        self.register = QuantumRegister::new(
-            Box::leak(Box::new("circuit".to_string())).as_str(),
-            &name_refs,
-        );
-        self.operations.clear();
+    pub fn measure(&mut self, qubit: usize, classical: usize) -> &mut Self {
+        if classical >= self.num_classical {
+            self.num_classical = classical + 1;
+        }
+        self.operations.push(GateOp::Measure(qubit, classical));
         self
     }
 
-    pub fn probability(&self, state_index: usize) -> f64 {
-        let state = self.state();
+    pub fn measure_all(&mut self) -> &mut Self {
+        for i in 0..self.num_qubits {
+            self.measure(i, i);
+        }
+        self
+    }
+
+    pub fn reset(&mut self) -> &mut Self {
+        self.operations.clear();
+        self.computed_state = None;
+        self
+    }
+
+    pub fn probability(&mut self, state_index: usize) -> f64 {
+        self.compute();
+        let state = self.computed_state.as_ref().unwrap();
         let amp = state.get(state_index);
         amp.norm2()
     }
 
-    pub fn probabilities(&self) -> Vec<f64> {
-        let state = self.state();
-        let n = 1 << self.num_qubits();
+    pub fn probabilities(&mut self) -> Vec<f64> {
+        self.compute();
+        let n = 1 << self.num_qubits;
+        let state = self.computed_state.as_ref().unwrap();
         (0..n).map(|i| state.get(i).norm2()).collect()
     }
-}
 
-impl<'a> fmt::Display for QuantumCircuit<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "QuantumCircuit ({} qubits)", self.num_qubits())?;
-        writeln!(f, "Operations:")?;
-        for (i, op) in self.operations.iter().enumerate() {
-            writeln!(f, "  {}: {} on {:?}", i, op.gate.name, op.targets)?;
-        }
-        writeln!(f, "State:")?;
-        let state = self.state();
-        let n = 1 << self.num_qubits();
-        for i in 0..n {
-            let amp = state.get(i);
-            if amp.real.abs() > 1e-10 || amp.imaginary.abs() > 1e-10 {
-                let basis: String = format!("{:0width$b}", i, width = self.num_qubits());
-                writeln!(f, "  |{}⟩: {}", basis, format_amplitude(&amp))?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl<'a> QuantumCircuit<'a> {
-    pub fn print_probabilities(&self) {
+    pub fn print_probabilities(&mut self) {
         let probs = self.probabilities();
-        let n = self.num_qubits();
+        let n = self.num_qubits;
         println!("Probabilities:");
         for (i, p) in probs.iter().enumerate() {
             if *p > 1e-10 {
@@ -229,5 +262,32 @@ impl<'a> QuantumCircuit<'a> {
                 println!("  |{}⟩: {}", basis, format_probability(*p));
             }
         }
+    }
+}
+
+impl fmt::Display for QuantumCircuit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "QuantumCircuit ({} qubits, {} classical)", self.num_qubits, self.num_classical)?;
+        writeln!(f, "Operations:")?;
+        for (i, op) in self.operations.iter().enumerate() {
+            match op {
+                GateOp::Measure(q, c) => writeln!(f, "  {}: {} q{} → c{}", i, op.name(), q, c)?,
+                _ => writeln!(f, "  {}: {} on {:?}", i, op.name(), op.quantum_targets())?,
+            }
+        }
+        if let Some(state) = &self.computed_state {
+            writeln!(f, "State:")?;
+            let n = 1 << self.num_qubits;
+            for i in 0..n {
+                let amp = state.get(i);
+                if amp.real.abs() > 1e-10 || amp.imaginary.abs() > 1e-10 {
+                    let basis: String = format!("{:0width$b}", i, width = self.num_qubits);
+                    writeln!(f, "  |{}⟩: {}", basis, format_amplitude(&amp))?;
+                }
+            }
+        } else {
+            writeln!(f, "State: (not computed)")?;
+        }
+        Ok(())
     }
 }
