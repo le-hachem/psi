@@ -59,7 +59,7 @@ pub fn format_duration(d: Duration) -> String {
     } else if d.as_millis() > 0 {
         format!("{:.3}ms", d.as_secs_f64() * 1000.0)
     } else {
-        format!("{:.3}us", d.as_secs_f64() * 1_000_000.0)
+        format!("{:.3}μs", d.as_secs_f64() * 1_000_000.0)
     }
 }
 
@@ -77,46 +77,95 @@ pub fn print_circuit(circuit: &QuantumCircuit) {
 }
 
 pub fn print_benchmark_table(results: &[BenchmarkResult]) {
-    const C1: usize = 30;
-    const C2: usize = 12;
-    const C3: usize = 12;
-    const C4: usize = 10;
-    const C5: usize = 5;
+    if results.is_empty() {
+        return;
+    }
+
+    let headers = ["Circuit", "BasicRT", "BasicRTMT", "Speedup", "Match"];
+
+    let formatted: Vec<(String, String, String, String, String)> = results
+        .iter()
+        .map(|r| {
+            let speedup = r.basic_time.as_secs_f64() / r.mt_time.as_secs_f64();
+            (
+                r.name.clone(),
+                format_duration(r.basic_time),
+                format_duration(r.mt_time),
+                if speedup.is_finite() {
+                    format!("{:.2}x", speedup)
+                } else {
+                    "N/A".to_string()
+                },
+                if r.results_match { "✓" } else { "✗" }.to_string(),
+            )
+        })
+        .collect();
+
+    let c1 = formatted
+        .iter()
+        .map(|r| r.0.len())
+        .max()
+        .unwrap()
+        .max(headers[0].len());
+    let c2 = formatted
+        .iter()
+        .map(|r| r.1.len())
+        .max()
+        .unwrap()
+        .max(headers[1].len());
+    let c3 = formatted
+        .iter()
+        .map(|r| r.2.len())
+        .max()
+        .unwrap()
+        .max(headers[2].len());
+    let c4 = formatted
+        .iter()
+        .map(|r| r.3.len())
+        .max()
+        .unwrap()
+        .max(headers[3].len());
+    let c5 = formatted
+        .iter()
+        .map(|r| r.4.chars().count())
+        .max()
+        .unwrap()
+        .max(headers[4].len());
 
     let top = format!(
         "╔{}═{}═{}═{}═{}╗",
-        "═".repeat(C1 + 2),
-        "═".repeat(C2 + 2),
-        "═".repeat(C3 + 2),
-        "═".repeat(C4 + 2),
-        "═".repeat(C5 + 2)
+        "═".repeat(c1 + 2),
+        "═".repeat(c2 + 2),
+        "═".repeat(c3 + 2),
+        "═".repeat(c4 + 2),
+        "═".repeat(c5 + 2)
     );
-    let title = format!(
+    let title_sep = format!(
         "╠{}╤{}╤{}╤{}╤{}╣",
-        "═".repeat(C1 + 2),
-        "═".repeat(C2 + 2),
-        "═".repeat(C3 + 2),
-        "═".repeat(C4 + 2),
-        "═".repeat(C5 + 2)
+        "═".repeat(c1 + 2),
+        "═".repeat(c2 + 2),
+        "═".repeat(c3 + 2),
+        "═".repeat(c4 + 2),
+        "═".repeat(c5 + 2)
     );
-    let header = format!(
+    let header_sep = format!(
         "╠{}╪{}╪{}╪{}╪{}╣",
-        "═".repeat(C1 + 2),
-        "═".repeat(C2 + 2),
-        "═".repeat(C3 + 2),
-        "═".repeat(C4 + 2),
-        "═".repeat(C5 + 2)
+        "═".repeat(c1 + 2),
+        "═".repeat(c2 + 2),
+        "═".repeat(c3 + 2),
+        "═".repeat(c4 + 2),
+        "═".repeat(c5 + 2)
     );
     let bottom = format!(
         "╚{}╧{}╧{}╧{}╧{}╝",
-        "═".repeat(C1 + 2),
-        "═".repeat(C2 + 2),
-        "═".repeat(C3 + 2),
-        "═".repeat(C4 + 2),
-        "═".repeat(C5 + 2)
+        "═".repeat(c1 + 2),
+        "═".repeat(c2 + 2),
+        "═".repeat(c3 + 2),
+        "═".repeat(c4 + 2),
+        "═".repeat(c5 + 2)
     );
 
-    let total_width = C1 + C2 + C3 + C4 + C5 + 14;
+    let total_width = c1 + c2 + c3 + c4 + c5 + 14;
 
     println!("\n{}", top);
     println!(
@@ -124,25 +173,17 @@ pub fn print_benchmark_table(results: &[BenchmarkResult]) {
         "RUNTIME BENCHMARK RESULTS",
         width = total_width
     );
-    println!("{}", title);
+    println!("{}", title_sep);
     println!(
-        "║ {:<C1$} │ {:^C2$} │ {:^C3$} │ {:^C4$} │ {:^C5$} ║",
-        "Circuit", "BasicRT", "BasicRTMT", "Speedup", "Match",
+        "║ {:<c1$} │ {:^c2$} │ {:^c3$} │ {:^c4$} │ {:^c5$} ║",
+        headers[0], headers[1], headers[2], headers[3], headers[4],
     );
-    println!("{}", header);
+    println!("{}", header_sep);
 
-    for r in results {
-        let speedup = r.basic_time.as_secs_f64() / r.mt_time.as_secs_f64();
-        let speedup_str = format!("{:.2}x", speedup);
-        let match_str = if r.results_match { "✓" } else { "✗" };
-
+    for (name, basic, mt, speedup, matched) in &formatted {
         println!(
-            "║ {:<C1$} │ {:>C2$} │ {:>C3$} │ {:>C4$} │ {:^C5$} ║",
-            r.name,
-            format_duration(r.basic_time),
-            format_duration(r.mt_time),
-            speedup_str,
-            match_str,
+            "║ {:<c1$} │ {:>c2$} │ {:>c3$} │ {:>c4$} │ {:^c5$} ║",
+            name, basic, mt, speedup, matched,
         );
     }
 

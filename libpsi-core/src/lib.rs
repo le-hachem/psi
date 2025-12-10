@@ -11,5 +11,6 @@ pub use core::circuit::*;
 pub use core::classical_components::*;
 pub use core::custom_gate::*;
 pub use core::gates;
+pub use core::kernel::*;
 pub use core::quantum_components::*;
 pub use core::runtime::*;

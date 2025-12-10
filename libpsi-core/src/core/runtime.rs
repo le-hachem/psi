@@ -1,4 +1,4 @@
-use super::{GateOp, QuantumGate, QuantumRegister, QuantumState};
+use super::{GateOp, Kernel, KernelBatch, QuantumGate, QuantumRegister, QuantumState};
 use crate::gates::{
     cp_matrix, crx_matrix, cry_matrix, crz_matrix, p_matrix, rx_matrix, ry_matrix,
     rz_matrix, u1_matrix, u2_matrix, u3_matrix, CNOT, CZ, FREDKIN, HADAMARD,
@@ -9,7 +9,6 @@ use crate::maths::vector::Vector;
 use crate::{complex, Complex, Matrix};
 use rayon::prelude::*;
 
-/// Minimum number of qubits to enable parallelism (2^8 = 256 state vector elements)
 const PARALLEL_THRESHOLD: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -17,6 +16,8 @@ pub enum Runtime {
     #[default]
     BasicRT,
     BasicRTMT,
+    BatchedRT,
+    BatchedRTMT,
     WFEvolution,
     WFEvolutionMT,
     GPUAccelerated,
@@ -27,6 +28,8 @@ impl Runtime {
         match self {
             Runtime::BasicRT => Self::compute_basic(num_qubits, operations),
             Runtime::BasicRTMT => Self::compute_basic_mt(num_qubits, operations),
+            Runtime::BatchedRT => Self::compute_batched(num_qubits, operations, false),
+            Runtime::BatchedRTMT => Self::compute_batched(num_qubits, operations, true),
             Runtime::WFEvolution => {
                 unimplemented!("WFEvolution (Schrödinger equation) runtime not yet implemented")
             }
@@ -39,6 +42,73 @@ impl Runtime {
                 unimplemented!("GPUAccelerated runtime not yet implemented")
             }
         }
+    }
+
+    pub fn build_kernel_batch(num_qubits: usize, operations: &[GateOp]) -> KernelBatch {
+        let mut batch = KernelBatch::new(num_qubits);
+
+        for op in operations {
+            if let Some(kernel) = Self::op_to_kernel(op) {
+                batch.add(kernel);
+            }
+        }
+
+        batch
+    }
+
+    fn op_to_kernel(op: &GateOp) -> Option<Kernel> {
+        let (matrix, targets, name): (Matrix<Complex<f64>>, Vec<usize>, &str) = match op {
+            GateOp::H(t) => (HADAMARD.matrix.clone(), vec![*t], "H"),
+            GateOp::X(t) => (PAULI_X.matrix.clone(), vec![*t], "X"),
+            GateOp::Y(t) => (PAULI_Y.matrix.clone(), vec![*t], "Y"),
+            GateOp::Z(t) => (PAULI_Z.matrix.clone(), vec![*t], "Z"),
+            GateOp::S(t) => (S_GATE.matrix.clone(), vec![*t], "S"),
+            GateOp::T(t) => (T_GATE.matrix.clone(), vec![*t], "T"),
+            GateOp::Sdg(t) => (SDG_GATE.matrix.clone(), vec![*t], "Sdg"),
+            GateOp::Tdg(t) => (TDG_GATE.matrix.clone(), vec![*t], "Tdg"),
+            GateOp::Sx(t) => (SX_GATE.matrix.clone(), vec![*t], "Sx"),
+            GateOp::Sxdg(t) => (SXDG_GATE.matrix.clone(), vec![*t], "Sxdg"),
+            GateOp::Rx(t, theta) => (rx_matrix(*theta), vec![*t], "Rx"),
+            GateOp::Ry(t, theta) => (ry_matrix(*theta), vec![*t], "Ry"),
+            GateOp::Rz(t, theta) => (rz_matrix(*theta), vec![*t], "Rz"),
+            GateOp::P(t, theta) => (p_matrix(*theta), vec![*t], "P"),
+            GateOp::U1(t, lambda) => (u1_matrix(*lambda), vec![*t], "U1"),
+            GateOp::U2(t, phi, lambda) => (u2_matrix(*phi, *lambda), vec![*t], "U2"),
+            GateOp::U3(t, theta, phi, lambda) => (u3_matrix(*theta, *phi, *lambda), vec![*t], "U3"),
+            GateOp::CNOT(c, t) => (CNOT.matrix.clone(), vec![*c, *t], "CNOT"),
+            GateOp::CZ(c, t) => (CZ.matrix.clone(), vec![*c, *t], "CZ"),
+            GateOp::SWAP(a, b) => (SWAP.matrix.clone(), vec![*a, *b], "SWAP"),
+            GateOp::CRx(c, t, theta) => (crx_matrix(*theta), vec![*c, *t], "CRx"),
+            GateOp::CRy(c, t, theta) => (cry_matrix(*theta), vec![*c, *t], "CRy"),
+            GateOp::CRz(c, t, theta) => (crz_matrix(*theta), vec![*c, *t], "CRz"),
+            GateOp::CP(c, t, theta) => (cp_matrix(*theta), vec![*c, *t], "CP"),
+            GateOp::CCNOT(c1, c2, t) => (TOFFOLI.matrix.clone(), vec![*c1, *c2, *t], "CCNOT"),
+            GateOp::CSWAP(c, t1, t2) => (FREDKIN.matrix.clone(), vec![*c, *t1, *t2], "CSWAP"),
+            GateOp::Measure(_, _) => return None,
+            GateOp::Custom(gate, tgts) => {
+                let qg = gate.to_quantum_gate();
+                (qg.matrix, tgts.clone(), "Custom")
+            }
+        };
+
+        Some(Kernel::new(name, matrix, targets))
+    }
+
+    fn compute_batched(num_qubits: usize, operations: &[GateOp], parallel: bool) -> QuantumState {
+        let dim = 1 << num_qubits;
+        let mut state: Vec<Complex<f64>> = vec![complex!(0.0, 0.0); dim];
+        state[0] = complex!(1.0, 0.0);
+
+        let mut batch = Self::build_kernel_batch(num_qubits, operations);
+        batch.optimize();
+
+        if parallel && num_qubits >= PARALLEL_THRESHOLD {
+            batch.execute_parallel(&mut state);
+        } else {
+            batch.execute(&mut state);
+        }
+
+        QuantumState::new(state)
     }
 
     fn compute_basic(num_qubits: usize, operations: &[GateOp]) -> QuantumState {
