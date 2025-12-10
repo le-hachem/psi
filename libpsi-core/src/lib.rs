@@ -5,6 +5,7 @@ pub use maths::complex::*;
 pub use maths::format::*;
 pub use maths::matrix::*;
 pub use maths::numeric::*;
+pub use maths::simd::*;
 pub use maths::vector::*;
 
 pub use core::circuit::*;

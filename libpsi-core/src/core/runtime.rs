@@ -1,9 +1,8 @@
 use super::{GateOp, Kernel, KernelBatch, QuantumGate, QuantumRegister, QuantumState};
 use crate::gates::{
-    cp_matrix, crx_matrix, cry_matrix, crz_matrix, p_matrix, rx_matrix, ry_matrix,
-    rz_matrix, u1_matrix, u2_matrix, u3_matrix, CNOT, CZ, FREDKIN, HADAMARD,
-    PAULI_X, PAULI_Y, PAULI_Z, SDG_GATE, SWAP, SXDG_GATE, SX_GATE, S_GATE, TDG_GATE,
-    TOFFOLI, T_GATE,
+    cp_matrix, crx_matrix, cry_matrix, crz_matrix, p_matrix, rx_matrix, ry_matrix, rz_matrix,
+    u1_matrix, u2_matrix, u3_matrix, CNOT, CZ, FREDKIN, HADAMARD, PAULI_X, PAULI_Y, PAULI_Z,
+    SDG_GATE, SWAP, SXDG_GATE, SX_GATE, S_GATE, TDG_GATE, TOFFOLI, T_GATE,
 };
 use crate::maths::vector::Vector;
 use crate::{complex, Complex, Matrix};
@@ -18,6 +17,8 @@ pub enum Runtime {
     BasicRTMT,
     BatchedRT,
     BatchedRTMT,
+    SimdRT,
+    SimdRTMT,
     WFEvolution,
     WFEvolutionMT,
     GPUAccelerated,
@@ -30,6 +31,8 @@ impl Runtime {
             Runtime::BasicRTMT => Self::compute_basic_mt(num_qubits, operations),
             Runtime::BatchedRT => Self::compute_batched(num_qubits, operations, false),
             Runtime::BatchedRTMT => Self::compute_batched(num_qubits, operations, true),
+            Runtime::SimdRT => Self::compute_simd(num_qubits, operations, false),
+            Runtime::SimdRTMT => Self::compute_simd(num_qubits, operations, true),
             Runtime::WFEvolution => {
                 unimplemented!("WFEvolution (Schrödinger equation) runtime not yet implemented")
             }
@@ -111,6 +114,23 @@ impl Runtime {
         QuantumState::new(state)
     }
 
+    fn compute_simd(num_qubits: usize, operations: &[GateOp], parallel: bool) -> QuantumState {
+        let dim = 1 << num_qubits;
+        let mut state: Vec<Complex<f64>> = vec![complex!(0.0, 0.0); dim];
+        state[0] = complex!(1.0, 0.0);
+
+        let mut batch = Self::build_kernel_batch(num_qubits, operations);
+        batch.optimize();
+
+        if parallel && num_qubits >= PARALLEL_THRESHOLD {
+            batch.execute_simd_parallel(&mut state);
+        } else {
+            batch.execute_simd(&mut state);
+        }
+
+        QuantumState::new(state)
+    }
+
     fn compute_basic(num_qubits: usize, operations: &[GateOp]) -> QuantumState {
         let names: Vec<String> = (0..num_qubits).map(|i| format!("q{}", i)).collect();
         let leaked_names: &'static [String] = Box::leak(names.into_boxed_slice());
@@ -134,14 +154,14 @@ impl Runtime {
                 GateOp::SWAP(a, b) => register.apply_gate(&SWAP, &[*a, *b]),
                 GateOp::CCNOT(c1, c2, t) => register.apply_gate(&TOFFOLI, &[*c1, *c2, *t]),
                 GateOp::CSWAP(c, t1, t2) => register.apply_gate(&FREDKIN, &[*c, *t1, *t2]),
-                
+
                 // Non-Clifford fixed gates
                 GateOp::T(t) => register.apply_gate(&T_GATE, &[*t]),
                 GateOp::Sdg(t) => register.apply_gate(&SDG_GATE, &[*t]),
                 GateOp::Tdg(t) => register.apply_gate(&TDG_GATE, &[*t]),
                 GateOp::Sx(t) => register.apply_gate(&SX_GATE, &[*t]),
                 GateOp::Sxdg(t) => register.apply_gate(&SXDG_GATE, &[*t]),
-                
+
                 // Parametric single-qubit gates (non-Clifford for most angles)
                 GateOp::Rx(t, theta) => {
                     let gate = QuantumGate {
@@ -199,7 +219,7 @@ impl Runtime {
                     };
                     register.apply_gate(&gate, &[*t]);
                 }
-                
+
                 // Controlled parametric gates
                 GateOp::CRx(c, t, theta) => {
                     let gate = QuantumGate {
@@ -233,7 +253,7 @@ impl Runtime {
                     };
                     register.apply_gate(&gate, &[*c, *t]);
                 }
-                
+
                 // Measurement and custom gates
                 GateOp::Measure(_, _) => {}
                 GateOp::Custom(gate, targets) => {
@@ -271,14 +291,14 @@ impl Runtime {
                 GateOp::SWAP(a, b) => (SWAP.matrix.clone(), vec![*a, *b]),
                 GateOp::CCNOT(c1, c2, t) => (TOFFOLI.matrix.clone(), vec![*c1, *c2, *t]),
                 GateOp::CSWAP(c, t1, t2) => (FREDKIN.matrix.clone(), vec![*c, *t1, *t2]),
-                
+
                 // Non-Clifford fixed gates
                 GateOp::T(t) => (T_GATE.matrix.clone(), vec![*t]),
                 GateOp::Sdg(t) => (SDG_GATE.matrix.clone(), vec![*t]),
                 GateOp::Tdg(t) => (TDG_GATE.matrix.clone(), vec![*t]),
                 GateOp::Sx(t) => (SX_GATE.matrix.clone(), vec![*t]),
                 GateOp::Sxdg(t) => (SXDG_GATE.matrix.clone(), vec![*t]),
-                
+
                 // Parametric single-qubit gates
                 GateOp::Rx(t, theta) => (rx_matrix(*theta), vec![*t]),
                 GateOp::Ry(t, theta) => (ry_matrix(*theta), vec![*t]),
@@ -287,13 +307,13 @@ impl Runtime {
                 GateOp::U1(t, lambda) => (u1_matrix(*lambda), vec![*t]),
                 GateOp::U2(t, phi, lambda) => (u2_matrix(*phi, *lambda), vec![*t]),
                 GateOp::U3(t, theta, phi, lambda) => (u3_matrix(*theta, *phi, *lambda), vec![*t]),
-                
+
                 // Controlled parametric gates
                 GateOp::CRx(c, t, theta) => (crx_matrix(*theta), vec![*c, *t]),
                 GateOp::CRy(c, t, theta) => (cry_matrix(*theta), vec![*c, *t]),
                 GateOp::CRz(c, t, theta) => (crz_matrix(*theta), vec![*c, *t]),
                 GateOp::CP(c, t, theta) => (cp_matrix(*theta), vec![*c, *t]),
-                
+
                 // Measurement (skip) and custom gates
                 GateOp::Measure(_, _) => continue,
                 GateOp::Custom(custom_gate, tgts) => {

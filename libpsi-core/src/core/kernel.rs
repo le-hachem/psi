@@ -1,3 +1,6 @@
+use crate::maths::simd::{
+    apply_single_qubit_gate_simd, apply_single_qubit_gate_simd_parallel, SimdCapability,
+};
 use crate::{complex, Complex, Matrix};
 use rayon::prelude::*;
 
@@ -108,6 +111,47 @@ impl KernelBatch {
             *state = apply_kernel_parallel(state, kernel, self.num_qubits);
         }
     }
+
+    pub fn execute_simd(&self, state: &mut Vec<Complex<f64>>) {
+        for kernel in &self.kernels {
+            if kernel.targets.len() == 1 {
+                let gate = matrix_to_2x2(&kernel.matrix);
+                apply_single_qubit_gate_simd(state, &gate, kernel.targets[0], self.num_qubits);
+            } else {
+                *state = apply_kernel(state, kernel, self.num_qubits);
+            }
+        }
+    }
+
+    pub fn execute_simd_parallel(&self, state: &mut Vec<Complex<f64>>) {
+        for kernel in &self.kernels {
+            if kernel.targets.len() == 1 && self.num_qubits >= 10 {
+                let gate = matrix_to_2x2(&kernel.matrix);
+                apply_single_qubit_gate_simd_parallel(
+                    state,
+                    &gate,
+                    kernel.targets[0],
+                    self.num_qubits,
+                );
+            } else if kernel.targets.len() == 1 {
+                let gate = matrix_to_2x2(&kernel.matrix);
+                apply_single_qubit_gate_simd(state, &gate, kernel.targets[0], self.num_qubits);
+            } else {
+                *state = apply_kernel_parallel(state, kernel, self.num_qubits);
+            }
+        }
+    }
+
+    pub fn simd_capability(&self) -> SimdCapability {
+        SimdCapability::detect()
+    }
+}
+
+fn matrix_to_2x2(matrix: &Matrix<Complex<f64>>) -> [[Complex<f64>; 2]; 2] {
+    [
+        [matrix.data[0], matrix.data[1]],
+        [matrix.data[2], matrix.data[3]],
+    ]
 }
 
 fn apply_kernel(state: &[Complex<f64>], kernel: &Kernel, num_qubits: usize) -> Vec<Complex<f64>> {

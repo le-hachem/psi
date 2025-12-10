@@ -2,7 +2,7 @@
 name = "libpsi-visualizer"
 version = "0.1.0"
 edition = "2021"
+authors = ["Hachem"]
 
 [dependencies]
 libpsi-core = { path = "../libpsi-core" }
-term_size = "0.3.2"
