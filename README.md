@@ -21,18 +21,24 @@ $\psi$ is a powerful quantum computing toolkit designed for simulating quantum c
 - Define gates from unitary matrices
 - Build composite gates from sequences of operations
 
-### Runtimes
+### Composable Runtime System
 
-| Runtime | Description |
+Build custom execution pipelines by combining optimisation features:
+
+| Feature | Description |
 |---------|-------------|
-| `BasicRT` | Single-threaded state vector simulation |
-| `BasicRTMT` | Multi-threaded parallel simulation |
-| `BatchedRT` | Kernel batching with gate fusion optimisation |
-| `BatchedRTMT` | Multi-threaded kernel batching |
-| `SimdRT` | SIMD-accelerated simulation (AVX2/AVX-512/NEON) |
-| `SimdRTMT` | Multi-threaded SIMD acceleration |
-| `WFEvolution` | Wave function time evolution (planned) |
-| `GPUAccelerated` | CUDA GPU acceleration (planned) |
+| `.batched()` | Kernel batching with gate fusion |
+| `.simd()` | SIMD acceleration (AVX-512/AVX2/NEON) |
+| `.structure_aware()` | Commutation analysis and advanced fusion |
+| `.parallel()` | Multi-threaded execution |
+| `.with_threshold(n)` | Set parallel threshold (default: 8 qubits) |
+
+**Predefined Runtimes:**
+- `Runtime::BasicRT` / `BasicRTMT` — Direct state vector simulation
+- `Runtime::BatchedRT` / `BatchedRTMT` — Batched kernel execution
+- `Runtime::SimdRT` / `SimdRTMT` — Batched + SIMD
+- `Runtime::StructureAwareRT` / `StructureAwareMT` — Structure-aware + SIMD
+- `Runtime::optimal()` — Structure-aware + SIMD + parallel
 
 ### SIMD Acceleration
 
@@ -42,12 +48,18 @@ Automatic detection and use of platform-specific SIMD instructions:
 - **NEON**: ARM processors (Apple Silicon, etc.)
 - **Scalar fallback**: Universal compatibility
 
-### Kernel Batching
+### Kernel Optimisations
 
-Optimisation system that:
+**Batching:**
 - Groups consecutive single-qubit gates on the same qubit
 - Fuses gate matrices to reduce operations
-- Typically achieves 30–50% kernel reduction and significantly reduces memory bandwidth pressure.
+- Typically achieves 30–50% kernel reduction
+
+**Structure-Aware:**
+- Gate type detection (diagonal, non-diagonal, controlled)
+- Commutation analysis for reordering
+- Multi-pass fusion until convergence
+- Execution layer grouping for parallelism
 
 ## Project Structure
 
@@ -61,49 +73,61 @@ Optimisation system that:
 
 ```rust
 use libpsi_core::{QuantumCircuit, Runtime};
-use std::f64::consts::PI;
 
 fn main() {
-    // Create a 3-qubit circuit
     let mut circuit = QuantumCircuit::new(3);
     
     // Build a GHZ state
-    circuit
-        .h(0)
-        .cnot(0, 1)
-        .cnot(0, 2);
+    circuit.h(0).cnot(0, 1).cnot(0, 2);
     
-    // Execute with SIMD acceleration
-    circuit.compute_with(Runtime::SimdRT);
+    // Execute with optimal settings
+    circuit.compute_with_config(Runtime::optimal());
     
-    // Print the quantum state
     println!("{}", circuit.state());
 }
+```
+
+### Composable Runtimes
+
+```rust
+use libpsi_core::{QuantumCircuit, RuntimeConfig};
+
+let mut circuit = QuantumCircuit::new(8);
+// ... add gates ...
+
+// Combine features as needed
+let config = RuntimeConfig::new()
+    .structure_aware()
+    .simd()
+    .parallel();
+
+circuit.compute_with_config(config);
 ```
 
 ### Parametric Gates
 
 ```rust
-let mut circuit = QuantumCircuit::new(2);
+use std::f64::consts::PI;
+
 circuit
-    .rx(0, PI / 4.0)      // Rotate around X
-    .ry(0, PI / 3.0)      // Rotate around Y
-    .rz(1, PI / 2.0)      // Rotate around Z
-    .crz(0, 1, PI / 4.0); // Controlled-Rz
+    .rx(0, PI / 4.0)       // Rotation around X
+    .ry(0, PI / 3.0)       // Rotation around Y
+    .rz(1, PI / 2.0)       // Rotation around Z
+    .crz(0, 1, PI / 4.0);  // Controlled-Rz
 ```
 
 ### Custom Gates
 
 ```rust
-use libpsi_core::{CustomGateBuilder, complex, matrix};
+use libpsi_core::{CustomGateBuilder, CustomGate, complex, matrix};
 
-// Build from operations
+// From operations
 let bell_gate = CustomGateBuilder::new("BELL", 2)
     .h(0)
     .cnot(0, 1)
     .build();
 
-// Or from a matrix
+// From a unitary matrix
 let sqrt_x_matrix = matrix!(
     [complex!(0.5, 0.5), complex!(0.5, -0.5)];
     [complex!(0.5, -0.5), complex!(0.5, 0.5)]
@@ -114,23 +138,18 @@ let sqrt_x = CustomGate::from_matrix("√X", sqrt_x_matrix);
 ## Running Tests
 
 ```bash
-# Run all tests
-cargo run --package tester --release
-
-# Run specific test modules
+cargo run --package tester --release           # All tests
 cargo run --package tester --release -- clifford
 cargo run --package tester --release -- non-clifford
 cargo run --package tester --release -- kernels
 cargo run --package tester --release -- simd
 cargo run --package tester --release -- bench
-
-# Show help
 cargo run --package tester --release -- help
 ```
 
 ## Disclaimer
 
-This project is under active development. Features and APIs may change. Some planned features may not arrive as scheduled due to technical challenges and research priorities.
+This project is under active development. Features and APIs may change.
 
 ## License
 

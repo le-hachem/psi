@@ -1,4 +1,4 @@
-use super::{CustomGate, QuantumState, Runtime};
+use super::{CustomGate, QuantumState, Runtime, RuntimeConfig};
 use crate::{format_amplitude, format_probability, Vector};
 use core::fmt;
 use std::sync::Arc;
@@ -193,12 +193,25 @@ impl QuantumCircuit {
         self.computed_state.as_ref().unwrap()
     }
 
+    pub fn compute_with_config(&mut self, config: RuntimeConfig) -> &QuantumState {
+        if self.computed_state.is_some() {
+            return self.computed_state.as_ref().unwrap();
+        }
+
+        self.computed_state = Some(config.compute(self.num_qubits, &self.operations));
+        self.computed_state.as_ref().unwrap()
+    }
+
     pub fn state(&mut self) -> &QuantumState {
         self.compute()
     }
 
     pub fn state_with(&mut self, runtime: Runtime) -> &QuantumState {
         self.compute_with(runtime)
+    }
+
+    pub fn state_with_config(&mut self, config: RuntimeConfig) -> &QuantumState {
+        self.compute_with_config(config)
     }
 
     pub fn h(&mut self, target: usize) -> &mut Self {
