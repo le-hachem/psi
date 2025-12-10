@@ -61,6 +61,34 @@ Automatic detection and use of platform-specific SIMD instructions:
 - Multi-pass fusion until convergence
 - Execution layer grouping for parallelism
 
+### Noise Channels (Density Matrix)
+
+Realistic quantum noise simulation using Kraus operators:
+
+| Channel | Description |
+|---------|-------------|
+| `depolarising(p)` | Random Pauli error with probability $p$ |
+| `amplitude_damping(γ)` | Energy decay ($T_1$ relaxation) |
+| `phase_damping(γ)` | Phase decoherence ($T_2$ dephasing) |
+| `bit_flip(p)` | $X$ error with probability $p$ |
+| `phase_flip(p)` | $Z$ error with probability $p$ |
+| `bit_phase_flip(p)` | $Y$ error with probability $p$ |
+
+```rust
+use libpsi_core::{DensityMatrix, NoiseChannel};
+
+// Create density matrix from circuit state
+let dm = DensityMatrix::from_state_vector(&state_vec);
+
+// Apply noise
+let noise = NoiseChannel::depolarising(0.05);
+dm.apply_noise_channel(&noise, 0);  // Apply to qubit 0
+
+// Check properties
+println!("Purity: {}", dm.purity());       // 1.0 = pure, <1.0 = mixed
+println!("Fidelity: {}", dm.fidelity_with_pure_state(&ideal_state));
+```
+
 ## Project Structure
 
 - **`libpsi-core`**: Core quantum simulation library

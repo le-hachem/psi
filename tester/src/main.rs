@@ -3,6 +3,7 @@ mod clifford;
 mod common;
 mod custom_gates;
 mod kernels;
+mod noise;
 mod non_clifford;
 mod simd;
 
@@ -25,6 +26,7 @@ fn print_usage() {
     println!("  custom       Run custom gate tests only");
     println!("  kernels      Run kernel batching tests only");
     println!("  simd         Run SIMD acceleration tests only");
+    println!("  noise        Run noise channel tests only");
     println!("  bench        Run benchmark tests only");
     println!("  help         Show this help message");
     println!();
@@ -34,6 +36,7 @@ fn print_usage() {
     println!("  tester non-clifford      # Run only rotation/parametric gate tests");
     println!("  tester kernels           # Run only kernel batching tests");
     println!("  tester simd              # Run only SIMD tests");
+    println!("  tester noise             # Run only noise channel tests");
     println!("  tester custom bench      # Run custom gates and benchmarks");
 }
 
@@ -58,6 +61,7 @@ fn main() {
     let run_custom = run_all || args.iter().any(|a| a == "custom");
     let run_kernels = run_all || args.iter().any(|a| a == "kernels");
     let run_simd = run_all || args.iter().any(|a| a == "simd");
+    let run_noise = run_all || args.iter().any(|a| a == "noise");
     let run_bench = run_all || args.iter().any(|a| a == "bench");
 
     if run_clifford {
@@ -78,6 +82,10 @@ fn main() {
 
     if run_simd {
         simd::run_all(&mut results);
+    }
+
+    if run_noise {
+        noise::run_all(&mut results);
     }
 
     if run_bench {
