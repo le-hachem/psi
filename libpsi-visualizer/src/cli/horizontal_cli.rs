@@ -144,6 +144,180 @@ impl<'a> fmt::Display for HorizontalRenderer<'a> {
                     }
                     gap_line.push_str("     ");
                 }
+                GateOp::Sdg(t) => {
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str("─[S†]─");
+                        } else {
+                            line.push_str("──────");
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str("══════");
+                    }
+                    gap_line.push_str("      ");
+                }
+                GateOp::Tdg(t) => {
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str("─[T†]─");
+                        } else {
+                            line.push_str("──────");
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str("══════");
+                    }
+                    gap_line.push_str("      ");
+                }
+                GateOp::Sx(t) => {
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str("─[√X]─");
+                        } else {
+                            line.push_str("──────");
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str("══════");
+                    }
+                    gap_line.push_str("      ");
+                }
+                GateOp::Sxdg(t) => {
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str("─[√X†]─");
+                        } else {
+                            line.push_str("───────");
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str("═══════");
+                    }
+                    gap_line.push_str("       ");
+                }
+                GateOp::Rx(t, theta) => {
+                    let label = format!("[Rx({:.2})]", theta);
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str(&format!("─{}─", label));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
+                GateOp::Ry(t, theta) => {
+                    let label = format!("[Ry({:.2})]", theta);
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str(&format!("─{}─", label));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
+                GateOp::Rz(t, theta) => {
+                    let label = format!("[Rz({:.2})]", theta);
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str(&format!("─{}─", label));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
+                GateOp::P(t, theta) => {
+                    let label = format!("[P({:.2})]", theta);
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str(&format!("─{}─", label));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
+                GateOp::U1(t, lambda) => {
+                    let label = format!("[U1({:.2})]", lambda);
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str(&format!("─{}─", label));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
+                GateOp::U2(t, _, _) => {
+                    let label = "[U2]";
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str(&format!("─{}─", label));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
+                GateOp::U3(t, _, _, _) => {
+                    let label = "[U3]";
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *t {
+                            line.push_str(&format!("─{}─", label));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
+                GateOp::CRx(c, t, theta) | GateOp::CRy(c, t, theta) | GateOp::CRz(c, t, theta) | GateOp::CP(c, t, theta) => {
+                    let label = match op {
+                        GateOp::CRx(_, _, _) => format!("[CRx({:.2})]", theta),
+                        GateOp::CRy(_, _, _) => format!("[CRy({:.2})]", theta),
+                        GateOp::CRz(_, _, _) => format!("[CRz({:.2})]", theta),
+                        GateOp::CP(_, _, _) => format!("[CP({:.2})]", theta),
+                        _ => unreachable!(),
+                    };
+                    for (i, line) in q_lines.iter_mut().enumerate() {
+                        if i == *c {
+                            line.push_str(&format!("─{}─", "●".to_string() + &"─".repeat(label.len() - 1)));
+                        } else if i == *t {
+                            line.push_str(&format!("─{}─", label));
+                        } else if i > min_q && i < max_q {
+                            line.push_str(&format!("─{}─", "│".to_string() + &"─".repeat(label.len() - 1)));
+                        } else {
+                            line.push_str(&format!("─{}─", "─".repeat(label.len())));
+                        }
+                    }
+                    for line in c_lines.iter_mut() {
+                        line.push_str(&format!("═{}═", "═".repeat(label.len())));
+                    }
+                    gap_line.push_str(&format!(" {} ", " ".repeat(label.len())));
+                }
                 GateOp::CNOT(c, t) => {
                     for (i, line) in q_lines.iter_mut().enumerate() {
                         if i == *c {

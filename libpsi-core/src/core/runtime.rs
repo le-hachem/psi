@@ -1,5 +1,10 @@
 use super::{GateOp, QuantumGate, QuantumRegister, QuantumState};
-use crate::gates::*;
+use crate::gates::{
+    cp_matrix, crx_matrix, cry_matrix, crz_matrix, p_matrix, rx_matrix, ry_matrix,
+    rz_matrix, u1_matrix, u2_matrix, u3_matrix, CNOT, CZ, FREDKIN, HADAMARD,
+    PAULI_X, PAULI_Y, PAULI_Z, SDG_GATE, SWAP, SXDG_GATE, SX_GATE, S_GATE, TDG_GATE,
+    TOFFOLI, T_GATE,
+};
 use crate::maths::vector::Vector;
 use crate::{complex, Complex, Matrix};
 use rayon::prelude::*;
@@ -48,17 +53,118 @@ impl Runtime {
 
         for op in operations {
             match op {
+                // Clifford gates
                 GateOp::H(t) => register.apply_gate(&HADAMARD, &[*t]),
                 GateOp::X(t) => register.apply_gate(&PAULI_X, &[*t]),
                 GateOp::Y(t) => register.apply_gate(&PAULI_Y, &[*t]),
                 GateOp::Z(t) => register.apply_gate(&PAULI_Z, &[*t]),
                 GateOp::S(t) => register.apply_gate(&S_GATE, &[*t]),
-                GateOp::T(t) => register.apply_gate(&T_GATE, &[*t]),
                 GateOp::CNOT(c, t) => register.apply_gate(&CNOT, &[*c, *t]),
                 GateOp::CZ(c, t) => register.apply_gate(&CZ, &[*c, *t]),
                 GateOp::SWAP(a, b) => register.apply_gate(&SWAP, &[*a, *b]),
                 GateOp::CCNOT(c1, c2, t) => register.apply_gate(&TOFFOLI, &[*c1, *c2, *t]),
                 GateOp::CSWAP(c, t1, t2) => register.apply_gate(&FREDKIN, &[*c, *t1, *t2]),
+                
+                // Non-Clifford fixed gates
+                GateOp::T(t) => register.apply_gate(&T_GATE, &[*t]),
+                GateOp::Sdg(t) => register.apply_gate(&SDG_GATE, &[*t]),
+                GateOp::Tdg(t) => register.apply_gate(&TDG_GATE, &[*t]),
+                GateOp::Sx(t) => register.apply_gate(&SX_GATE, &[*t]),
+                GateOp::Sxdg(t) => register.apply_gate(&SXDG_GATE, &[*t]),
+                
+                // Parametric single-qubit gates (non-Clifford for most angles)
+                GateOp::Rx(t, theta) => {
+                    let gate = QuantumGate {
+                        name: "Rx",
+                        matrix: rx_matrix(*theta),
+                        num_qubits: 1,
+                    };
+                    register.apply_gate(&gate, &[*t]);
+                }
+                GateOp::Ry(t, theta) => {
+                    let gate = QuantumGate {
+                        name: "Ry",
+                        matrix: ry_matrix(*theta),
+                        num_qubits: 1,
+                    };
+                    register.apply_gate(&gate, &[*t]);
+                }
+                GateOp::Rz(t, theta) => {
+                    let gate = QuantumGate {
+                        name: "Rz",
+                        matrix: rz_matrix(*theta),
+                        num_qubits: 1,
+                    };
+                    register.apply_gate(&gate, &[*t]);
+                }
+                GateOp::P(t, theta) => {
+                    let gate = QuantumGate {
+                        name: "P",
+                        matrix: p_matrix(*theta),
+                        num_qubits: 1,
+                    };
+                    register.apply_gate(&gate, &[*t]);
+                }
+                GateOp::U1(t, lambda) => {
+                    let gate = QuantumGate {
+                        name: "U1",
+                        matrix: u1_matrix(*lambda),
+                        num_qubits: 1,
+                    };
+                    register.apply_gate(&gate, &[*t]);
+                }
+                GateOp::U2(t, phi, lambda) => {
+                    let gate = QuantumGate {
+                        name: "U2",
+                        matrix: u2_matrix(*phi, *lambda),
+                        num_qubits: 1,
+                    };
+                    register.apply_gate(&gate, &[*t]);
+                }
+                GateOp::U3(t, theta, phi, lambda) => {
+                    let gate = QuantumGate {
+                        name: "U3",
+                        matrix: u3_matrix(*theta, *phi, *lambda),
+                        num_qubits: 1,
+                    };
+                    register.apply_gate(&gate, &[*t]);
+                }
+                
+                // Controlled parametric gates
+                GateOp::CRx(c, t, theta) => {
+                    let gate = QuantumGate {
+                        name: "CRx",
+                        matrix: crx_matrix(*theta),
+                        num_qubits: 2,
+                    };
+                    register.apply_gate(&gate, &[*c, *t]);
+                }
+                GateOp::CRy(c, t, theta) => {
+                    let gate = QuantumGate {
+                        name: "CRy",
+                        matrix: cry_matrix(*theta),
+                        num_qubits: 2,
+                    };
+                    register.apply_gate(&gate, &[*c, *t]);
+                }
+                GateOp::CRz(c, t, theta) => {
+                    let gate = QuantumGate {
+                        name: "CRz",
+                        matrix: crz_matrix(*theta),
+                        num_qubits: 2,
+                    };
+                    register.apply_gate(&gate, &[*c, *t]);
+                }
+                GateOp::CP(c, t, theta) => {
+                    let gate = QuantumGate {
+                        name: "CP",
+                        matrix: cp_matrix(*theta),
+                        num_qubits: 2,
+                    };
+                    register.apply_gate(&gate, &[*c, *t]);
+                }
+                
+                // Measurement and custom gates
                 GateOp::Measure(_, _) => {}
                 GateOp::Custom(gate, targets) => {
                     let quantum_gate = gate.to_quantum_gate();
@@ -83,18 +189,42 @@ impl Runtime {
         state[0] = complex!(1.0, 0.0);
 
         for op in operations {
-            let (gate, targets): (&QuantumGate, Vec<usize>) = match op {
-                GateOp::H(t) => (&HADAMARD, vec![*t]),
-                GateOp::X(t) => (&PAULI_X, vec![*t]),
-                GateOp::Y(t) => (&PAULI_Y, vec![*t]),
-                GateOp::Z(t) => (&PAULI_Z, vec![*t]),
-                GateOp::S(t) => (&S_GATE, vec![*t]),
-                GateOp::T(t) => (&T_GATE, vec![*t]),
-                GateOp::CNOT(c, t) => (&CNOT, vec![*c, *t]),
-                GateOp::CZ(c, t) => (&CZ, vec![*c, *t]),
-                GateOp::SWAP(a, b) => (&SWAP, vec![*a, *b]),
-                GateOp::CCNOT(c1, c2, t) => (&TOFFOLI, vec![*c1, *c2, *t]),
-                GateOp::CSWAP(c, t1, t2) => (&FREDKIN, vec![*c, *t1, *t2]),
+            let (gate_matrix, targets): (Matrix<Complex<f64>>, Vec<usize>) = match op {
+                // Clifford gates
+                GateOp::H(t) => (HADAMARD.matrix.clone(), vec![*t]),
+                GateOp::X(t) => (PAULI_X.matrix.clone(), vec![*t]),
+                GateOp::Y(t) => (PAULI_Y.matrix.clone(), vec![*t]),
+                GateOp::Z(t) => (PAULI_Z.matrix.clone(), vec![*t]),
+                GateOp::S(t) => (S_GATE.matrix.clone(), vec![*t]),
+                GateOp::CNOT(c, t) => (CNOT.matrix.clone(), vec![*c, *t]),
+                GateOp::CZ(c, t) => (CZ.matrix.clone(), vec![*c, *t]),
+                GateOp::SWAP(a, b) => (SWAP.matrix.clone(), vec![*a, *b]),
+                GateOp::CCNOT(c1, c2, t) => (TOFFOLI.matrix.clone(), vec![*c1, *c2, *t]),
+                GateOp::CSWAP(c, t1, t2) => (FREDKIN.matrix.clone(), vec![*c, *t1, *t2]),
+                
+                // Non-Clifford fixed gates
+                GateOp::T(t) => (T_GATE.matrix.clone(), vec![*t]),
+                GateOp::Sdg(t) => (SDG_GATE.matrix.clone(), vec![*t]),
+                GateOp::Tdg(t) => (TDG_GATE.matrix.clone(), vec![*t]),
+                GateOp::Sx(t) => (SX_GATE.matrix.clone(), vec![*t]),
+                GateOp::Sxdg(t) => (SXDG_GATE.matrix.clone(), vec![*t]),
+                
+                // Parametric single-qubit gates
+                GateOp::Rx(t, theta) => (rx_matrix(*theta), vec![*t]),
+                GateOp::Ry(t, theta) => (ry_matrix(*theta), vec![*t]),
+                GateOp::Rz(t, theta) => (rz_matrix(*theta), vec![*t]),
+                GateOp::P(t, theta) => (p_matrix(*theta), vec![*t]),
+                GateOp::U1(t, lambda) => (u1_matrix(*lambda), vec![*t]),
+                GateOp::U2(t, phi, lambda) => (u2_matrix(*phi, *lambda), vec![*t]),
+                GateOp::U3(t, theta, phi, lambda) => (u3_matrix(*theta, *phi, *lambda), vec![*t]),
+                
+                // Controlled parametric gates
+                GateOp::CRx(c, t, theta) => (crx_matrix(*theta), vec![*c, *t]),
+                GateOp::CRy(c, t, theta) => (cry_matrix(*theta), vec![*c, *t]),
+                GateOp::CRz(c, t, theta) => (crz_matrix(*theta), vec![*c, *t]),
+                GateOp::CP(c, t, theta) => (cp_matrix(*theta), vec![*c, *t]),
+                
+                // Measurement (skip) and custom gates
                 GateOp::Measure(_, _) => continue,
                 GateOp::Custom(custom_gate, tgts) => {
                     let quantum_gate = custom_gate.to_quantum_gate();
@@ -103,7 +233,7 @@ impl Runtime {
                 }
             };
 
-            state = apply_gate_parallel(&state, &gate.matrix, &targets, num_qubits);
+            state = apply_gate_parallel(&state, &gate_matrix, &targets, num_qubits);
         }
 
         QuantumState::new(state)

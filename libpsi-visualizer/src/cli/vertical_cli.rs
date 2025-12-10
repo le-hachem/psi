@@ -19,6 +19,21 @@ impl<'a> VerticalRenderer<'a> {
             GateOp::Z(_) => "[Z]".to_string(),
             GateOp::S(_) => "[S]".to_string(),
             GateOp::T(_) => "[T]".to_string(),
+            GateOp::Sdg(_) => "[S†]".to_string(),
+            GateOp::Tdg(_) => "[T†]".to_string(),
+            GateOp::Sx(_) => "[√X]".to_string(),
+            GateOp::Sxdg(_) => "[√X†]".to_string(),
+            GateOp::Rx(_, theta) => format!("[Rx({:.2})]", theta),
+            GateOp::Ry(_, theta) => format!("[Ry({:.2})]", theta),
+            GateOp::Rz(_, theta) => format!("[Rz({:.2})]", theta),
+            GateOp::P(_, theta) => format!("[P({:.2})]", theta),
+            GateOp::U1(_, lambda) => format!("[U1({:.2})]", lambda),
+            GateOp::U2(_, _, _) => "[U2]".to_string(),
+            GateOp::U3(_, _, _, _) => "[U3]".to_string(),
+            GateOp::CRx(_, _, _) => "[CRx]".to_string(),
+            GateOp::CRy(_, _, _) => "[CRy]".to_string(),
+            GateOp::CRz(_, _, _) => "[CRz]".to_string(),
+            GateOp::CP(_, _, _) => "[CP]".to_string(),
             GateOp::CNOT(_, _) => "●".to_string(),
             GateOp::CZ(_, _) => "●".to_string(),
             GateOp::SWAP(_, _) => "╳".to_string(),
@@ -121,7 +136,18 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
                 | GateOp::Y(t)
                 | GateOp::Z(t)
                 | GateOp::S(t)
-                | GateOp::T(t) => {
+                | GateOp::T(t)
+                | GateOp::Sdg(t)
+                | GateOp::Tdg(t)
+                | GateOp::Sx(t)
+                | GateOp::Sxdg(t)
+                | GateOp::Rx(t, _)
+                | GateOp::Ry(t, _)
+                | GateOp::Rz(t, _)
+                | GateOp::P(t, _)
+                | GateOp::U1(t, _)
+                | GateOp::U2(t, _, _)
+                | GateOp::U3(t, _, _, _) => {
                     let mut line: Vec<char> = vec![' '; total_width];
 
                     for i in 0..nq {
@@ -145,24 +171,37 @@ impl<'a> fmt::Display for VerticalRenderer<'a> {
                     let gate_line: String = line.into_iter().collect();
                     writeln!(f, "{}", gate_line)?;
                 }
-                GateOp::CNOT(c, t) | GateOp::CZ(c, t) | GateOp::SWAP(c, t) => {
+                GateOp::CNOT(c, t) | GateOp::CZ(c, t) | GateOp::SWAP(c, t)
+                | GateOp::CRx(c, t, _) | GateOp::CRy(c, t, _) | GateOp::CRz(c, t, _) | GateOp::CP(c, t, _) => {
                     let (sym1, sym2) = match op {
                         GateOp::CNOT(_, _) => ('●', '⊕'),
                         GateOp::CZ(_, _) => ('●', '●'),
                         GateOp::SWAP(_, _) => ('╳', '╳'),
+                        GateOp::CRx(_, _, _) | GateOp::CRy(_, _, _) | GateOp::CRz(_, _, _) | GateOp::CP(_, _, _) => ('●', '□'),
                         _ => unreachable!(),
                     };
 
                     let mut line: Vec<char> = vec![' '; total_width];
 
                     for i in 0..nq {
-                        let center = i * (col_width + 1) + col_width / 2;
+                        let col_start = i * (col_width + 1);
+                        let center = col_start + col_width / 2;
                         if i < min_q || i > max_q {
                             line[center] = '│';
                         } else if i == *c {
                             line[center] = sym1;
                         } else if i == *t {
-                            line[center] = sym2;
+                            // For controlled parametric gates, show the gate label on target
+                            if matches!(op, GateOp::CRx(_, _, _) | GateOp::CRy(_, _, _) | GateOp::CRz(_, _, _) | GateOp::CP(_, _, _)) {
+                                let label_start = col_start + (col_width - label.chars().count()) / 2;
+                                for (j, ch) in label.chars().enumerate() {
+                                    if label_start + j < line.len() {
+                                        line[label_start + j] = ch;
+                                    }
+                                }
+                            } else {
+                                line[center] = sym2;
+                            }
                         }
                     }
 
